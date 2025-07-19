@@ -5,6 +5,11 @@ import cors from 'cors';
 import http from 'http';
 import { Server as SocketIOServer } from 'socket.io';
 
+import baseRouter from './routes/index.js';
+import auth from './middlewares/auth.js';
+import commonResponse from './middlewares/commonResponse.js';
+import { validate } from './middlewares/validate.js';
+
 // Load environment variables
 dotenv.config();
 
@@ -26,15 +31,26 @@ app.use(express.json());
 connectDB();
 
 
-// Routes
-import baseRouter from './routes/index.js';
+
+app.use(commonResponse);
+// app.use(auth);
+
 app.use('/api', baseRouter);
+
+
 
 // Socket.io connection
 io.on('connection', (socket) => {
   console.log('A user connected:', socket.id);
   socket.on('disconnect', () => {
     console.log('User disconnected:', socket.id);
+  });
+});
+
+app.all('*', (req, res) => {
+  res.status(404).json({
+    success: false,
+    message: `Invalid Endpoint : ${req.originalUrl}`,
   });
 });
 
