@@ -1,7 +1,22 @@
+import User from "../models/User.js";
+
 // User Controller
-export const getUserById = (req, res) => {
-  // Implement get user by ID logic
-  res.send('User by ID');
+export const getUserById = async (req, res) => {
+  try {
+    const userId = req.params.id;
+
+    // Fetch user without password
+    const user = await User.findById(userId).select('-password');
+
+    if (!user) {
+      return res.sendError('User not found', 404);
+    }
+
+    res.sendSuccess(user, 'User fetched successfully');
+  } catch (error) {
+    console.error('Error fetching user:', error);
+    res.sendError('Server error', 500);
+  }
 };
 
 export const updateUser = (req, res) => {

@@ -1,26 +1,26 @@
-import express from 'express';
-import connectDB from './config/db.js';
 import dotenv from 'dotenv';
+dotenv.config();
 import cors from 'cors';
+import express from 'express';
+import bodyParser from 'body-parser';
 import http from 'http';
-import { Server as SocketIOServer } from 'socket.io';
+import connectDB from './config/db.js';
 
+import commonResponse from './middlewares/commonResponse.js';
 import baseRouter from './routes/index.js';
 import auth from './middlewares/auth.js';
-import commonResponse from './middlewares/commonResponse.js';
-import { validate } from './middlewares/validate.js';
+import { initializeSocket } from './socket.js';
 
 // Load environment variables
-dotenv.config();
+
 
 const app = express();
+// app.use(bodyParser.json());
+
+
+
 const server = http.createServer(app);
-const io = new SocketIOServer(server, {
-  cors: {
-    origin: '*',
-    methods: ['GET', 'POST']
-  }
-});
+initializeSocket(server);
 
 // Middleware
 app.use(cors());
@@ -38,14 +38,6 @@ app.use(commonResponse);
 app.use('/api', baseRouter);
 
 
-
-// Socket.io connection
-io.on('connection', (socket) => {
-  console.log('A user connected:', socket.id);
-  socket.on('disconnect', () => {
-    console.log('User disconnected:', socket.id);
-  });
-});
 
 app.all('*', (req, res) => {
   res.status(404).json({
