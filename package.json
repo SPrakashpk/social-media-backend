@@ -4,7 +4,6 @@
   "main": "src/server.js",
   "type": "module",
   "scripts": {
-    "postinstall": "cd ../social-media-frontend && npm install && npm run build",
     "start": "node src/server.js",
     "dev": "nodemon src/server.js"
   },
