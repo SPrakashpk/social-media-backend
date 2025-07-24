@@ -23,7 +23,10 @@ const server = http.createServer(app);
 initializeSocket(server);
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: 'http://localhost:5173', // or your Vercel frontend URL in production
+  credentials: true,
+}));
 app.use(express.json());
 
 
