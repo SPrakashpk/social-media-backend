@@ -5,7 +5,7 @@ import jwt from 'jsonwebtoken';
 export const registerUser = async (req, res) => {
     let newUser = null;
     try {
-        const { name, email, password, bio, avatar } = req.body;
+        const { name, email, password,  } = req.body;
 
         // Check if user already exists
         const existingUser = await User.findOne({ email });
@@ -54,9 +54,42 @@ export const registerUser = async (req, res) => {
     }
 };
 
-export const loginUser = (req, res) => {
-    // Implement login logic
-    res.send('User logged in');
+export const loginUser = async (req, res) => {
+    try {
+        const {email, password, } = req.body;
+
+        // Check if user already exists
+        const existingUser = await User.findOne({ email });
+        if (!existingUser) {
+            return res.sendError('Invalid Username or Password', 400);
+        }
+
+        // check password
+        const isPasswordValid = await bcrypt.compare(password, existingUser.password);
+        if(!isPasswordValid){
+            return res.sendError('Invalid Username or Password', 400);
+        }
+
+        // Create JWT
+        const token = jwt.sign({ id: existingUser._id }, process.env.JWT_SECRET, {
+            expiresIn: '7d',
+        });
+
+        // Return success
+        return res.sendSuccess({
+            user: {
+                id: existingUser._id,
+                name: existingUser.name,
+                email: existingUser.email,
+                bio: existingUser.bio,
+                avatar: existingUser.avatar,
+            },
+            token,
+        }, 'User loggedin successfully', 200);
+
+    } catch (err) {
+        return res.sendError('Server error', 500, err);
+    }
 };
 
 export const getCurrentUser = (req, res) => {

@@ -1,81 +1,102 @@
 import { Server } from "socket.io";
+import Chat from "./models/Chat.js";
+import User from "./models/User.js";
+import Message from "./models/Message.js";
 
 const users = {};       // socket.id → userId
 const userSockets = {}; // userId → socket.id
 
-export const initializeSocket = (server) => {
-    const io = new Server(server, {
-        cors: {
-            origin: '*', // or specific origin
-            //   methods: ['GET', 'POST'],
-        },
-    });
+const onlineUsers = new Map()
 
-    initSocket(io);
+export const initializeSocket = (server) => {
+  const io = new Server(server, {
+    cors: {
+      origin: '*', // or specific origin
+      //   methods: ['GET', 'POST'],
+    },
+  });
+
+  initSocket(io);
 };
 
 const initSocket = (io) => {
-    io.on('connection', (socket) => {
-        console.log('🔌 User connected:', socket.id);
+  io.on('connection', (socket) => {
+    console.log('🔌 User connected:', socket.id);
 
-        // User registration
-        socket.on('register', (userId) => {
-            try {
-                if (!userId) {
-                    console.warn(`❗ Missing userId in register event from socket ${socket.id}`);
-                    return;
-                }
-
-                users[socket.id] = userId;
-                userSockets[userId] = socket.id;
-                console.log(`✅ ${userId} registered with socket ${socket.id}`);
-            } catch (err) {
-                console.error('🔥 Error in register handler:', err);
-            }
-        });
-
-        // Private messaging
-        socket.on('private-message', ({ toUserId, message }) => {
-            console.log('private messagin recived')
-            try {
-                if (!toUserId || !message) {
-                    console.warn('❗ Invalid private_message payload:', { toUserId, message });
-                    return;
-                }
-
-                const toSocketId = userSockets[toUserId];
-                if (!toSocketId) {
-                    console.warn(`❗ User ${toUserId} is not connected`);
-                    return;
-                }
-
-                io.to(toSocketId).emit('receive-message', {
-                    fromUserId: users[socket.id],
-                    message,
-                });
-
-                console.log(`📨 Message from ${users[socket.id]} to ${toUserId}`);
-            } catch (err) {
-                console.error('🔥 Error in private_message handler:', err);
-            }
-        });
-
-        // Disconnection
-        socket.on('disconnect', () => {
-            try {
-                const userId = users[socket.id];
-                if (userId) {
-                    delete userSockets[userId];
-                }
-                delete users[socket.id];
-                console.log('❌ User disconnected:', socket.id);
-            } catch (err) {
-                console.error('🔥 Error during disconnect:', err);
-            }
-        });
-
-        socket.onAny((event, ...args) => {
-            console.log(`[${socket.id}] Received event: ${event}`, args);
-        });
+    // Join user
+    socket.on('user:join', async (userId) => {
+      onlineUsers.set(userId, socket.id);
+      // await User.findByIdAndUpdate(userId, { isOnline: true });
+      io.emit('user:online', userId);
     });
+
+    // Send message
+    socket.on('message:send', async ({ chatId, senderId, content, type, mentions }) => {
+      // 1. Create the message
+      const message = await Message.create({
+        chat: chatId,
+        sender: senderId,
+        content,
+        type,
+        mention: mentions,
+      });
+
+      // 2. Update latest message in the chat
+      await Chat.findByIdAndUpdate(chatId, { latestMessage: message._id });
+
+      // 3. Populate sender info for emission
+      const populatedMessage = await Message.findById(message._id)
+        .populate({
+          path: 'sender',
+          select: '_id name avatar', // include isOnline if stored in DB or track via `onlineUsers`
+        });
+
+      // 4. Add isOnline manually from your tracking map
+      const enrichedMessage = {
+        ...populatedMessage.toObject(),
+        sender: {
+          ...populatedMessage.sender.toObject(),
+          isOnline: onlineUsers.has(senderId),
+        },
+      };
+
+      // 5. Notify all chat members
+      const chat = await Chat.findById(chatId).populate('members');
+      chat.members.forEach(member => {
+        const socketId = onlineUsers.get(member._id.toString());
+        if (socketId) {
+          io.to(socketId).emit('message:receive', enrichedMessage);
+        }
+      });
+    });
+
+
+    // Typing
+    socket.on('typing:start', async ({ chatId, userId }) => {
+      await Chat.findByIdAndUpdate(chatId, { $addToSet: { typing: userId } });
+      io.emit('typing:update', { chatId });
+    });
+
+    socket.on('typing:stop', async ({ chatId, userId }) => {
+      await Chat.findByIdAndUpdate(chatId, { $pull: { typing: userId } });
+      io.emit('typing:update', { chatId });
+    });
+
+    // Message status update
+    socket.on('message:seen', async ({ messageId }) => {
+      await Message.findByIdAndUpdate(messageId, { status: 'seen' });
+    });
+
+    // Disconnect
+    socket.on('disconnect', async () => {
+      for (let [userId, sockId] of onlineUsers.entries()) {
+        if (sockId === socket.id) {
+          // await User.findByIdAndUpdate(userId, { isOnline: false, lastSeen: new Date() });
+          onlineUsers.delete(userId);
+          io.emit('user:offline', userId);
+          break;
+        }
+      }
+    });
+  });
 };

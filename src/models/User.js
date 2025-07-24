@@ -14,7 +14,8 @@ const userSchema = new mongoose.Schema({
   bio: { type: String },
   followers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   following: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
-  // _id: false,
+   isOnline: {type: Boolean, default: false}
+  // _id: false
 }, { timestamps: true });
 
 export default mongoose.model('User', userSchema);

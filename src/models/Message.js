@@ -1,10 +1,17 @@
 import mongoose from 'mongoose';
+import { nanoid } from 'nanoid';
 
-const messageSchema = new mongoose.Schema({
-  chat: { type: mongoose.Schema.Types.ObjectId, ref: 'Chat', required: true },
-  sender: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  content: { type: String, required: true },
-  status: { type: String, enum: ['sent', 'delivered', 'seen'], default: 'sent' },
+const MessageSchema = new mongoose.Schema({
+   _id: {
+        type: String,
+        default: () => nanoid(12), // 12-char custom ID
+      },
+  chat: { type: String, ref: 'Chat' },
+  sender: { type: String, ref: 'User' },
+  content: String,
+  type: { type: String, enum: ['text', 'image', 'video'], default: 'text' },
+  mention: [{ type: String, ref: 'User' }],
+  status: { type: String, enum: ['sent', 'delivered', 'seen'], default: 'sent' }
 }, { timestamps: true });
 
-export default mongoose.model('Message', messageSchema);
+export default mongoose.model('Message', MessageSchema);
