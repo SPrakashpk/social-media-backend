@@ -1,9 +1,8 @@
-import { nanoid } from 'nanoid';
-import User from '../models/User.js';
-import Post from '../models/Post.js';
-import postMediaUpload from '../config/multer-s3.js';
-import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
+import { GetObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import Post from '../models/Post.js';
+import User from '../models/User.js';
+
 
 const s3Client = new S3Client({
   region: process.env.AWS_REGION,
@@ -48,20 +47,181 @@ export const createPostWithMedia = async (req, res) => {
         res.sendError('Something went wrong');
     }
 };
-export const getAllPosts = (req, res) => {
-    // Implement get all posts logic
-    res.send('All posts');
+export const getAllPosts = async (req, res) => {
+  try {
+    const posts = await Post.find()
+      .sort({ createdAt: -1 })
+      .populate({
+        path: 'userId',
+        select: '_id username name avatar'
+      })
+      // Optional: Populate only if you want comment details
+      // .populate({
+      //   path: 'comments',
+      //   populate: {
+      //     path: 'userId',
+      //     select: '_id username name avatar'
+      //   },
+      //   options: { sort: { createdAt: -1 } }
+      // })
+
+    const postsWithSignedMedia = await Promise.all(
+      posts.map(async (post) => {
+        const postObj = post.toObject()
+
+        if (postObj.media?.length > 0) {
+          const signedMedia = await Promise.all(
+            postObj.media.map(async (mediaItem) => {
+              try {
+                const command = new GetObjectCommand({
+                  Bucket: process.env.AWS_S3_BUCKET,
+                  Key: mediaItem.key
+                })
+
+                const signedUrl = await getSignedUrl(s3Client, command, {
+                  expiresIn: 60 * 60 // 1 hour
+                })
+
+                return {
+                  ...mediaItem,
+                  signedUrl
+                }
+              } catch (err) {
+                console.error(`Failed to sign media: ${mediaItem.key}`, err)
+                return mediaItem // fallback to original
+              }
+            })
+          )
+
+          postObj.media = signedMedia
+        }
+
+        return postObj
+      })
+    )
+
+    res.sendSuccess(postsWithSignedMedia, 'Posts fetched successfully')
+  } catch (error) {
+    console.error('Get all posts error:', error)
+    res.sendError('Something went wrong')
+  }
+}
+
+
+export const getFeedPosts = async (req, res) => {
+  try {
+    const currentUserId = req.user?._id || req.query.id;
+
+    const currentUser = await User.findById(currentUserId).select('following');
+    const followingIds = currentUser.following;
+
+    const posts = await Post.find({ userId: { $in: followingIds } })
+      .sort({ createdAt: -1 })
+      .populate({
+        path: 'userId',
+        select: '_id username name avatar'
+      })
+      .populate({
+        path: 'comments',
+        populate: {
+          path: 'userId',
+          select: '_id username name avatar'
+        },
+        options: { sort: { createdAt: -1 } }
+      });
+
+    const postsWithMedia = await Promise.all(
+      posts.map(async (post) => {
+        const postObj = post.toObject();
+
+        if (postObj.media?.length > 0) {
+          const signedMedia = await Promise.all(
+            postObj.media.map(async (mediaItem) => {
+              try {
+                const command = new GetObjectCommand({
+                  Bucket: process.env.AWS_S3_BUCKET,
+                  Key: mediaItem.key
+                });
+                const signedUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
+                return { ...mediaItem, signedUrl };
+              } catch (err) {
+                console.error(`Failed to sign media key: ${mediaItem.key}`, err);
+                return mediaItem;
+              }
+            })
+          );
+          postObj.media = signedMedia;
+        }
+
+        return postObj;
+      })
+    );
+
+    res.sendSuccess(postsWithMedia, 'Feed posts fetched');
+  } catch (err) {
+    console.error('getFeedPosts error:', err);
+    res.sendError('Something went wrong fetching feed');
+  }
 };
 
-export const getFeedPosts = (req, res) => {
-    // Implement get feed posts logic
-    res.send('Feed posts');
+export const getExplorePosts = async (req, res) => {
+  try {
+    const currentUserId = req.user?._id || req.query.id;
+
+    const currentUser = await User.findById(currentUserId).select('following');
+    const followingIds = currentUser.following;
+
+    const posts = await Post.find({
+      // userId: { $nin: [...followingIds, currentUserId] }
+    })
+      .sort({ createdAt: -1 })
+      .populate({
+        path: 'userId',
+        select: '_id username name avatar'
+      })
+      .populate({
+        path: 'comments',
+        populate: {
+          path: 'userId',
+          select: '_id username name avatar'
+        },
+        options: { sort: { createdAt: -1 } }
+      });
+
+    const postsWithMedia = await Promise.all(
+      posts.map(async (post) => {
+        const postObj = post.toObject();
+
+        if (postObj.media?.length > 0) {
+          const signedMedia = await Promise.all(
+            postObj.media.map(async (mediaItem) => {
+              try {
+                const command = new GetObjectCommand({
+                  Bucket: process.env.AWS_S3_BUCKET,
+                  Key: mediaItem.key
+                });
+                const signedUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
+                return { ...mediaItem, signedUrl };
+              } catch (err) {
+                console.error(`Failed to sign media key: ${mediaItem.key}`, err);
+                return mediaItem;
+              }
+            })
+          );
+          postObj.media = signedMedia;
+        }
+
+        return postObj;
+      })
+    );
+
+    res.sendSuccess(postsWithMedia, 'Explore posts fetched');
+  } catch (err) {
+    console.error('getExplorePosts error:', err);
+    res.sendError('Something went wrong fetching explore');
+  }
 };
 
-export const getExplorePosts = (req, res) => {
-    // Implement get explore posts logic
-    res.send('Explore posts');
-};
 
 export const getPostById = async (req, res) => {
   try {
