@@ -6,10 +6,29 @@ export const getChatUsers = (req, res) => {
   res.send('Chat users');
 };
 
-export const getChatMessages = (req, res) => {
-  // Implement get chat messages logic
-  res.send('Chat messages');
+import Message from '../models/Message.js';
+
+export const getChatMessages = async (req, res) => {
+  const { chatId } = req.query;
+
+  if (!chatId) return res.sendError('Chat ID is required', 400);
+
+  try {
+    const messages = await Message.find({ chat: chatId })
+      .sort({ createdAt: 1 }) // oldest to newest
+      .populate({
+        path: 'sender',
+        model: 'User',
+        select: 'name avatar isOnline'
+      });
+
+    res.sendSuccess(messages);
+  } catch (err) {
+    console.error(err);
+    res.sendError('Failed to fetch messages', 500);
+  }
 };
+
 
 export const sendMessage = (req, res) => {
   // Implement send message logic
@@ -39,17 +58,27 @@ export const createPrivateChat = async (req, res) => {
 
 export const getChatList = async (req, res) => {
   const userId = req.query.userId;
+
   try {
     const chats = await Chat.find({ members: userId })
-      .populate('members', 'name avatar isOnline') // for 1-to-1 display
+      .populate('members', 'name avatar isOnline')
       .populate('admins', '_id')
       .populate({
         path: 'latestMessage',
-        populate: { path: 'sender', select: 'name avatar' }
+        populate: {
+          path: 'sender',
+          model: 'User', // ✅ required when _id is string
+          select: 'name avatar isOnline'
+        }
       })
-      .sort({ updatedAt: -1 });
-    res.sendSuccess(chats)
+      .sort({ updatedAt: -1 })
+      .lean();
+
+    res.sendSuccess(chats);
   } catch (err) {
-    res.sendError('get list failed',500);
+    console.error('Get chat list error:', err);
+    res.sendError('Get chat list failed', 500);
   }
 };
+
+

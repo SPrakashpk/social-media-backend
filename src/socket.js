@@ -9,21 +9,21 @@ const userSockets = {}; // userId → socket.id
 const onlineUsers = new Map()
 
 export const initializeSocket = (server) => {
-    const io = new Server(server, {
-        cors: {
-            origin: '*', // or specific origin
-            //   methods: ['GET', 'POST'],
-        },
-    });
+  const io = new Server(server, {
+    cors: {
+      origin: '*', // or specific origin
+      //   methods: ['GET', 'POST'],
+    },
+  });
 
-    initSocket(io);
+  initSocket(io);
 };
 
 const initSocket = (io) => {
-    io.on('connection', (socket) => {
-        console.log('🔌 User connected:', socket.id);
+  io.on('connection', (socket) => {
+    console.log('🔌 User connected:', socket.id);
 
-        // Join user
+    // Join user
     socket.on('user:join', async (userId) => {
       onlineUsers.set(userId, socket.id);
       // await User.findByIdAndUpdate(userId, { isOnline: true });
@@ -32,18 +32,44 @@ const initSocket = (io) => {
 
     // Send message
     socket.on('message:send', async ({ chatId, senderId, content, type, mentions }) => {
-      const message = await Message.create({ chat: chatId, sender: senderId, content, type, mention: mentions });
+      // 1. Create the message
+      const message = await Message.create({
+        chat: chatId,
+        sender: senderId,
+        content,
+        type,
+        mention: mentions,
+      });
 
+      // 2. Update latest message in the chat
       await Chat.findByIdAndUpdate(chatId, { latestMessage: message._id });
 
+      // 3. Populate sender info for emission
+      const populatedMessage = await Message.findById(message._id)
+        .populate({
+          path: 'sender',
+          select: '_id name avatar', // include isOnline if stored in DB or track via `onlineUsers`
+        });
+
+      // 4. Add isOnline manually from your tracking map
+      const enrichedMessage = {
+        ...populatedMessage.toObject(),
+        sender: {
+          ...populatedMessage.sender.toObject(),
+          isOnline: onlineUsers.has(senderId),
+        },
+      };
+
+      // 5. Notify all chat members
       const chat = await Chat.findById(chatId).populate('members');
       chat.members.forEach(member => {
         const socketId = onlineUsers.get(member._id.toString());
         if (socketId) {
-          io.to(socketId).emit('message:receive', message);
+          io.to(socketId).emit('message:receive', enrichedMessage);
         }
       });
     });
+
 
     // Typing
     socket.on('typing:start', async ({ chatId, userId }) => {
