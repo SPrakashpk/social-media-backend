@@ -17,6 +17,14 @@ const userSchema = new mongoose.Schema({
   isVerified: { type: Boolean, default: false }, // <-- New
   otp: { type: String }, // <-- OTP value
   otpExpiresAt: { type: Date }, // <-- Expiry time
+  followRequests: [{ type: String, ref: 'User' }], // pending requests
+
+  status: {
+    type: String,
+    enum: ['active', 'email-verification-pending', 'deleted'],
+    default: 'active',
+  },
+
 }, { timestamps: true });
 
 export default mongoose.model('User', userSchema);

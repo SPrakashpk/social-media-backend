@@ -7,13 +7,12 @@ import Post from '../models/Post.js';
 export const registerUser = async (req, res) => {
     let newUser = null;
     try {
-        console.log('registerUser() - body:', req.body); // ✅ Log this
         const { name, email, password, username, bio = '', avatar = '' } = req.body;
 
-        // const existingUser = await User.findOne({ email });
-        // if (existingUser) {
-        //   return res.sendError('Email already in use', 400);
-        // }
+        const existingUser = await User.findOne({ email });
+        if (existingUser) {
+            return res.sendError('Email already in use', 400);
+        }
 
         const hashedPassword = await bcrypt.hash(password, 10);
         const otp = Math.floor(100000 + Math.random() * 900000).toString();
@@ -31,16 +30,32 @@ export const registerUser = async (req, res) => {
         });
 
         await newUser.save();
-        await sendOTP(email, otp);
+        // await sendOTP(email, otp);
 
-        return res.sendSuccess(
-            {
-                email,
-                message: 'OTP sent to email',
+        // return res.sendSuccess(
+        //     {
+        //         email,
+        //         message: 'OTP sent to email',
+        //     },
+        //     'Registration initiated. Verify OTP to continue.',
+        //     201
+        // );
+        // Create JWT
+        const token = jwt.sign({ id: newUser._id }, process.env.JWT_SECRET, {
+            expiresIn: '7d',
+        });
+
+        // Return success
+        return res.sendSuccess({
+            user: {
+                id: newUser._id,
+                name: newUser.name,
+                email: newUser.email,
+                bio: newUser.bio,
+                avatar: newUser.avatar,
             },
-            'Registration initiated. Verify OTP to continue.',
-            201
-        );
+            token,
+        }, 'User registered successfully', 200);
     } catch (err) {
         if (newUser && newUser._id) {
             await User.findByIdAndDelete(newUser._id);

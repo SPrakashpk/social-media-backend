@@ -114,3 +114,55 @@ export const getUserProfileDetails = async (req, res) => {
   }
 };
 
+export const uploadAvatar = async (req, res) => {
+  try {
+    if (!req.file || !req.file.key) {
+      return res.status(400).json({ success: false, message: 'No file uploaded' });
+    }
+
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+    // Remove old avatar if exists and is not default
+    if (user.profilePic && !user.profilePic.includes('pixabay.com')) {
+      const oldKey = user.profilePic.split('.amazonaws.com/')[1];
+      if (oldKey) {
+        await s3.deleteObject({ Bucket: process.env.AWS_S3_BUCKET, Key: oldKey }).promise();
+      }
+    }
+
+    const avatarUrl = req.file.location;
+    user.profilePic = avatarUrl;
+    await user.save();
+
+    res.status(200).json({ success: true, message: 'Avatar updated', avatarUrl });
+  } catch (err) {
+    console.error('Avatar upload error:', err);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+export const removeAvatar = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user || !user.profilePic) {
+      return res.status(404).json({ success: false, message: 'No avatar to remove' });
+    }
+
+    if (!user.profilePic.includes('pixabay.com')) {
+      const key = user.profilePic.split('.amazonaws.com/')[1];
+      if (key) {
+        await s3.deleteObject({ Bucket: process.env.AWS_S3_BUCKET, Key: key }).promise();
+      }
+    }
+
+    user.profilePic = '';
+    await user.save();
+    res.status(200).json({ success: true, message: 'Avatar removed' });
+  } catch (err) {
+    console.error('Error removing avatar:', err);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+
