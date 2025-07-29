@@ -1,3 +1,21 @@
+// Update post (only owner)
+export const updatePost = async (req, res) => {
+  try {
+    const postId = req.params.id;
+    const { text } = req.body;
+    // Ownership is enforced by isPostOwner middleware
+    const updated = await Post.findByIdAndUpdate(
+      postId,
+      { $set: { text } },
+      { new: true }
+    );
+    if (!updated) return res.sendError('Post not found', 404);
+    res.sendSuccess(updated, 'Post updated successfully');
+  } catch (err) {
+    console.error('Update post error:', err);
+    res.sendError('Server error', 500);
+  }
+};
 import { GetObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import Post from '../models/Post.js';
@@ -279,8 +297,19 @@ export const getPostById = async (req, res) => {
 };
 
 export const deletePost = (req, res) => {
-    // Implement delete post logic
-    res.send('Post deleted');
+    /*
+      Ownership is enforced by isPostOwner middleware
+    */
+    const postId = req.params.id;
+    Post.findByIdAndDelete(postId)
+      .then((deleted) => {
+        if (!deleted) return res.sendError('Post not found', 404);
+        res.sendSuccess(null, 'Post deleted successfully');
+      })
+      .catch((err) => {
+        console.error('Delete post error:', err);
+        res.sendError('Server error', 500);
+      });
 };
 
 export const likePost = async (req, res) => {

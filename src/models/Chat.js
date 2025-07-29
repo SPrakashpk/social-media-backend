@@ -11,6 +11,10 @@ const ChatSchema = new mongoose.Schema({
   avatar: String,
   members: [{ type: String, ref: 'User' }],
   admins: [{ type: String, ref: 'User' }],
+  roles: [{
+    user: { type: String, ref: 'User' },
+    role: { type: String, enum: ['admin', 'moderator', 'member'], default: 'member' }
+  }],
   createdBy: { type: String, ref: 'User' },
   latestMessage: { type: String, ref: 'Message' },
   typing: [{ type: String, ref: 'User' }]

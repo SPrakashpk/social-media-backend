@@ -29,24 +29,98 @@ export const updateUser = (req, res) => {
   res.send('User updated');
 };
 
-export const followUser = (req, res) => {
-  // Implement follow user logic
-  res.send('User followed');
+export const followUser = async (req, res) => {
+  try {
+    const targetUserId = req.params.id;
+    const currentUserId = req.user?.id || req.user?._id; // Use safe fallback
+
+    if (!targetUserId || !currentUserId) {
+      return res.status(400).json({ message: 'User IDs are required' });
+    }
+
+    if (targetUserId === currentUserId) {
+      return res.status(400).json({ message: "You can't follow yourself" });
+    }
+
+    const targetUser = await User.findById(targetUserId);
+    const currentUser = await User.findById(currentUserId);
+
+    if (!targetUser || !currentUser) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    if (!targetUser.followers.includes(currentUserId)) {
+      targetUser.followers.push(currentUserId);
+      currentUser.following.push(targetUserId);
+
+      await targetUser.save();
+      await currentUser.save();
+    }
+
+    res.status(200).json({ message: 'User followed successfully' });
+  } catch (error) {
+    console.error('🔴 Follow error:', error); // full error object
+    res.status(500).json({ success: false, message: 'Server error', error });
+  }
 };
 
+
 export const unfollowUser = (req, res) => {
-  // Implement unfollow user logic
-  res.send('User unfollowed');
+  /*
+    req.userId: ID of current user (from auth middleware)
+    req.params.id: ID of user to unfollow
+  */
+  try {
+    const currentUserId = req.userId;
+    const targetUserId = req.params.id;
+    if (currentUserId === targetUserId) {
+      return res.sendError("You can't unfollow yourself", 400);
+    }
+    // Remove from following of current user, remove from followers of target user
+    Promise.all([
+      User.findByIdAndUpdate(currentUserId, { $pull: { following: targetUserId } }, { new: true }),
+      User.findByIdAndUpdate(targetUserId, { $pull: { followers: currentUserId } }, { new: true })
+    ]).then(([current, target]) => {
+      if (!target) return res.sendError('User not found', 404);
+      res.sendSuccess({ following: current.following, followers: target.followers }, 'Unfollowed successfully');
+    }).catch(err => {
+      console.error(err);
+      res.sendError('Server error', 500);
+    });
+  } catch (error) {
+    console.error(error);
+    res.sendError('Server error', 500);
+  }
 };
 
 export const getFollowers = (req, res) => {
-  // Implement get followers logic
-  res.send('Followers list');
+  // req.params.id: user whose followers to fetch
+  User.findById(req.params.id)
+    .populate('followers', '_id name username avatar')
+    .select('followers')
+    .then(user => {
+      if (!user) return res.sendError('User not found', 404);
+      res.sendSuccess(user.followers, 'Followers fetched');
+    })
+    .catch(err => {
+      console.error(err);
+      res.sendError('Server error', 500);
+    });
 };
 
 export const getFollowing = (req, res) => {
-  // Implement get following logic
-  res.send('Following list');
+  // req.params.id: user whose following to fetch
+  User.findById(req.params.id)
+    .populate('following', '_id name username avatar')
+    .select('following')
+    .then(user => {
+      if (!user) return res.sendError('User not found', 404);
+      res.sendSuccess(user.following, 'Following fetched');
+    })
+    .catch(err => {
+      console.error(err);
+      res.sendError('Server error', 500);
+    });
 };
 
 

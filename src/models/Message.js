@@ -11,7 +11,7 @@ const MessageSchema = new mongoose.Schema({
   content: String,
   type: { type: String, enum: ['text', 'image', 'video'], default: 'text' },
   mention: [{ type: String, ref: 'User' }],
-  status: { type: String, enum: ['sent', 'delivered', 'seen'], default: 'sent' }
+  status: { type: String, enum: ['sent', 'delivered', 'read'], default: 'sent' }
 }, { timestamps: true });
 
 export default mongoose.model('Message', MessageSchema);
