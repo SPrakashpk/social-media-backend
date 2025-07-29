@@ -24,7 +24,7 @@ initializeSocket(server);
 
 // Middleware
 app.use(cors({
-  origin: process.env.FRONTEND_URL, // or your Vercel frontend URL in production
+  origin: "https://social-media-frontend-three-delta.vercel.app",//process.env.FRONTEND_URL, // or your Vercel frontend URL in production
   credentials: true,
 }));
 app.use(express.json());
