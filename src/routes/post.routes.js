@@ -1,22 +1,35 @@
 import express from 'express';
-import { createPostWithMedia, deletePost, getAllPosts, getExplorePosts, getFeedPosts, getPostById, likePost, unlikePost } from '../controllers/post.controller.js';
-import { validate } from '../middlewares/validate.js';
-import { postValidationSchema } from '../validation/post.schema.js';
+import {
+    createPostWithMedia,
+    deletePost,
+    getAllPosts,
+    getExplorePosts,
+    getFeedPosts,
+    getPostById,
+    likePost,
+    unlikePost,
+    updatePost,
+} from '../controllers/post.controller.js';
 
-import multer from 'multer';
-import postMediaUpload from '../config/multer-s3.js';
+import isPostOwner from '../middlewares/isPostOwner.js';
 
-const upload = multer({ dest: 'uploads/' })
 
-const router = express.Router();
+import { uploadPostMedia } from '../config/multer-s3.js';
 
-router.post('/create',postMediaUpload, createPostWithMedia);
+
+
+const router = express.Router(); 
+
+router.post('/create',(req, res,next)=>{console.log('post route reached');
+    next();
+}, uploadPostMedia, createPostWithMedia);
 router.get('/', getAllPosts);
 router.get('/feed', getFeedPosts);
 router.get('/explore', getExplorePosts);
 router.get('/:id', getPostById);
-router.delete('/:id', deletePost);
-router.post('/like-post/:id', likePost);
+router.put('/:id', isPostOwner, updatePost); // ✅ moved here
+router.delete('/:id', isPostOwner, deletePost);
+router.post('/:id/like', likePost);
 router.delete('/:id/like', unlikePost);
 
 export default router;

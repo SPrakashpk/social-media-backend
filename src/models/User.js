@@ -3,19 +3,28 @@ import { nanoid } from 'nanoid';
 
 
 const userSchema = new mongoose.Schema({
-   _id: {
-    type: String,
-    default: () => nanoid(12), // 12-char custom ID
-  },
+  _id: { type: String, default: () => nanoid(12),},
   name: { type: String, required: true },
   email: { type: String, required: true, unique: true },
   password: { type: String, required: true },
+  username: { type: String },
   avatar: { type: String },
   bio: { type: String },
-  followers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
-  following: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
-   isOnline: {type: Boolean, default: false}
-  // _id: false
+  followers: [{ type: String, ref: 'User' }],
+  following: [{ type: String, ref: 'User' }],
+  isOnline: { type: Boolean, default: false },
+  isPrivateAccount: { type: Boolean, default: false },
+  isVerified: { type: Boolean, default: false }, // <-- New
+  otp: { type: String }, // <-- OTP value
+  otpExpiresAt: { type: Date }, // <-- Expiry time
+  followRequests: [{ type: String, ref: 'User' }], // pending requests
+
+  status: {
+    type: String,
+    enum: ['active', 'email-verification-pending', 'deleted'],
+    default: 'active',
+  },
+
 }, { timestamps: true });
 
 export default mongoose.model('User', userSchema);

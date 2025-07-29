@@ -30,8 +30,17 @@ const initSocket = (io) => {
       io.emit('user:online', userId);
     });
 
-    // Send message
-    socket.on('message:send', async ({ chatId, senderId, content, type, mentions }) => {
+
+    // Send message with mention support
+    socket.on('message:send', async ({ chatId, senderId, content, type }) => {
+      // Parse mentions from content (e.g., @username)
+      const mentionUsernames = (content.match(/@([a-zA-Z0-9_]+)/g) || []).map(m => m.slice(1));
+      let mentions = [];
+      if (mentionUsernames.length) {
+        mentions = await User.find({ username: { $in: mentionUsernames } }, '_id');
+        mentions = mentions.map(u => u._id);
+      }
+
       // 1. Create the message
       const message = await Message.create({
         chat: chatId,
@@ -48,7 +57,7 @@ const initSocket = (io) => {
       const populatedMessage = await Message.findById(message._id)
         .populate({
           path: 'sender',
-          select: '_id name avatar', // include isOnline if stored in DB or track via `onlineUsers`
+          select: '_id name avatar',
         });
 
       // 4. Add isOnline manually from your tracking map
@@ -68,23 +77,86 @@ const initSocket = (io) => {
           io.to(socketId).emit('message:receive', enrichedMessage);
         }
       });
+
+      // 6. Notify mentioned users (if in chat)
+      mentions.forEach(mentionedId => {
+        if (chat.members.some(m => m._id.toString() === mentionedId.toString())) {
+          const socketId = onlineUsers.get(mentionedId.toString());
+          if (socketId) {
+            io.to(socketId).emit('mention:notify', {
+              chatId,
+              messageId: message._id,
+              from: senderId,
+              content
+            });
+          }
+        }
+      });
     });
 
 
-    // Typing
+    // Typing indicator (per chat room)
     socket.on('typing:start', async ({ chatId, userId }) => {
+      // Optionally track typing users in memory for performance
       await Chat.findByIdAndUpdate(chatId, { $addToSet: { typing: userId } });
-      io.emit('typing:update', { chatId });
+      // Notify all members in the chat room except the sender
+      const chat = await Chat.findById(chatId).populate('members');
+      chat.members.forEach(member => {
+        if (member._id.toString() !== userId) {
+          const socketId = onlineUsers.get(member._id.toString());
+          if (socketId) {
+            io.to(socketId).emit('typing:start', { chatId, userId });
+          }
+        }
+      });
     });
 
     socket.on('typing:stop', async ({ chatId, userId }) => {
       await Chat.findByIdAndUpdate(chatId, { $pull: { typing: userId } });
-      io.emit('typing:update', { chatId });
+      const chat = await Chat.findById(chatId).populate('members');
+      chat.members.forEach(member => {
+        if (member._id.toString() !== userId) {
+          const socketId = onlineUsers.get(member._id.toString());
+          if (socketId) {
+            io.to(socketId).emit('typing:stop', { chatId, userId });
+          }
+        }
+      });
     });
 
-    // Message status update
-    socket.on('message:seen', async ({ messageId }) => {
-      await Message.findByIdAndUpdate(messageId, { status: 'seen' });
+
+    // Message status: delivered
+    socket.on('message:delivered', async ({ messageId, chatId, userId }) => {
+      const message = await Message.findByIdAndUpdate(messageId, { status: 'delivered' }, { new: true });
+      // Broadcast to chat members
+      const chat = await Chat.findById(chatId).populate('members');
+      chat.members.forEach(member => {
+        const socketId = onlineUsers.get(member._id.toString());
+        if (socketId) {
+          io.to(socketId).emit('message:status', {
+            messageId,
+            status: 'delivered',
+            userId
+          });
+        }
+      });
+    });
+
+    // Message status: read
+    socket.on('message:read', async ({ messageId, chatId, userId }) => {
+      const message = await Message.findByIdAndUpdate(messageId, { status: 'read' }, { new: true });
+      // Broadcast to chat members
+      const chat = await Chat.findById(chatId).populate('members');
+      chat.members.forEach(member => {
+        const socketId = onlineUsers.get(member._id.toString());
+        if (socketId) {
+          io.to(socketId).emit('message:status', {
+            messageId,
+            status: 'read',
+            userId
+          });
+        }
+      });
     });
 
     // Disconnect
@@ -99,4 +171,5 @@ const initSocket = (io) => {
       }
     });
   });
+  io.on('error', (error) => console.log(error));
 };
