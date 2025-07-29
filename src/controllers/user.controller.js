@@ -32,7 +32,7 @@ export const updateUser = (req, res) => {
 export const followUser = async (req, res) => {
   try {
     const targetUserId = req.params.id;
-    const currentUserId = req.user?.id || req.user?._id; // Use safe fallback
+    const currentUserId = req.user?.id || req.query.currentUserId; // Use safe fallback
 
     if (!targetUserId || !currentUserId) {
       return res.status(400).json({ message: 'User IDs are required' });
@@ -128,6 +128,7 @@ export const getFollowing = (req, res) => {
 export const getUserProfileDetails = async (req, res) => {
   try {
     const userId = req.query.id;
+    const currentUserId = req.user?.id || req.query.currentUserId;
 
     const user = await User.findById(userId)
       .select('_id username name bio avatar followers following');
@@ -170,6 +171,12 @@ export const getUserProfileDetails = async (req, res) => {
       })
     );
 
+    // Check if current user is following this user
+    let isCurrentUserFollowing = false;
+    if (currentUserId && user.followers && Array.isArray(user.followers)) {
+      isCurrentUserFollowing = user.followers.map(f => f.toString()).includes(currentUserId.toString());
+    }
+
     res.sendSuccess({
       _id: user._id,
       username: user.username,
@@ -180,6 +187,7 @@ export const getUserProfileDetails = async (req, res) => {
       followingCount: user.following.length,
       postCount: posts.length,
       posts: postsWithMedia,
+      isCurrentUserFollowing,
     }, 'User profile fetched successfully');
 
   } catch (error) {
@@ -194,7 +202,7 @@ export const uploadAvatar = async (req, res) => {
       return res.status(400).json({ success: false, message: 'No file uploaded' });
     }
 
-    const user = await User.findById(req.user.id);
+    const user = await User.findById(req.user.id || req.body.userId);
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
 
     // Remove old avatar if exists and is not default

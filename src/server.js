@@ -24,8 +24,8 @@ initializeSocket(server);
 
 // Middleware
 app.use(cors({
-  origin: '*',//process.env.FRONTEND_URL, // or your Vercel frontend URL in production
-  // credentials: true,
+  origin: process.env.FRONTEND_URL, // or your Vercel frontend URL in production
+  credentials: true,
 }));
 app.use(express.json());
 
@@ -36,7 +36,7 @@ connectDB();
 
 
 app.use(commonResponse);
-// app.use(auth);
+app.use(auth);
 
 app.use('/api', baseRouter);
 

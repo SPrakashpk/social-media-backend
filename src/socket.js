@@ -171,4 +171,5 @@ const initSocket = (io) => {
       }
     });
   });
+  io.on('error', (error) => console.log(error));
 };

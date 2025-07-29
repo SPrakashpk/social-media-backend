@@ -129,26 +129,28 @@ export const getAllPosts = async (req, res) => {
 export const getFeedPosts = async (req, res) => {
   try {
     const currentUserId = req.user?._id || req.query.id;
-
     const currentUser = await User.findById(currentUserId).select('following');
     const followingIds = currentUser.following;
 
-    const posts = await Post.find({ userId: { $in: followingIds } })
+    // Include current user's own posts as well
+    const userIdsToFetch = [...followingIds.map(id => id.toString()), currentUserId.toString()];
+
+    const posts = await Post.find({ userId: { $in: userIdsToFetch } })
       .sort({ createdAt: -1 })
       .populate({
         path: 'userId',
-        select: '_id username name avatar'
+        select: '_id name avatar',
       })
       .populate({
         path: 'comments',
         populate: {
           path: 'userId',
-          select: '_id username name avatar'
+          select: '_id name avatar',
         },
-        options: { sort: { createdAt: -1 } }
+        options: { sort: { createdAt: -1 } },
       });
 
-    const postsWithMedia = await Promise.all(
+    const postsWithSignedMedia = await Promise.all(
       posts.map(async (post) => {
         const postObj = post.toObject();
 
@@ -158,10 +160,18 @@ export const getFeedPosts = async (req, res) => {
               try {
                 const command = new GetObjectCommand({
                   Bucket: process.env.AWS_S3_BUCKET,
-                  Key: mediaItem.key
+                  Key: mediaItem.key,
                 });
-                const signedUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
-                return { ...mediaItem, signedUrl };
+                const signedUrl = await getSignedUrl(s3Client, command, {
+                  expiresIn: 3600,
+                });
+                return {
+                  _id: mediaItem._id,
+                  key: mediaItem.key,
+                  type: mediaItem.type,
+                  url: mediaItem.url,
+                  signedUrl,
+                };
               } catch (err) {
                 console.error(`Failed to sign media key: ${mediaItem.key}`, err);
                 return mediaItem;
@@ -175,38 +185,38 @@ export const getFeedPosts = async (req, res) => {
       })
     );
 
-    res.sendSuccess(postsWithMedia, 'Feed posts fetched');
+    res.sendSuccess(postsWithSignedMedia, 'Feed posts fetched');
   } catch (err) {
     console.error('getFeedPosts error:', err);
     res.sendError('Something went wrong fetching feed');
   }
 };
 
+
 export const getExplorePosts = async (req, res) => {
   try {
     const currentUserId = req.user?._id || req.query.id;
-
     const currentUser = await User.findById(currentUserId).select('following');
     const followingIds = currentUser.following;
 
     const posts = await Post.find({
-      // userId: { $nin: [...followingIds, currentUserId] }
+      userId: { $nin: [...followingIds, currentUserId] },
     })
       .sort({ createdAt: -1 })
       .populate({
         path: 'userId',
-        select: '_id username name avatar'
+        select: '_id name avatar',
       })
       .populate({
         path: 'comments',
         populate: {
           path: 'userId',
-          select: '_id username name avatar'
+          select: '_id name avatar',
         },
-        options: { sort: { createdAt: -1 } }
+        options: { sort: { createdAt: -1 } },
       });
 
-    const postsWithMedia = await Promise.all(
+    const postsWithSignedMedia = await Promise.all(
       posts.map(async (post) => {
         const postObj = post.toObject();
 
@@ -216,10 +226,18 @@ export const getExplorePosts = async (req, res) => {
               try {
                 const command = new GetObjectCommand({
                   Bucket: process.env.AWS_S3_BUCKET,
-                  Key: mediaItem.key
+                  Key: mediaItem.key,
                 });
-                const signedUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
-                return { ...mediaItem, signedUrl };
+                const signedUrl = await getSignedUrl(s3Client, command, {
+                  expiresIn: 3600,
+                });
+                return {
+                  _id: mediaItem._id,
+                  key: mediaItem.key,
+                  type: mediaItem.type,
+                  url: mediaItem.url,
+                  signedUrl,
+                };
               } catch (err) {
                 console.error(`Failed to sign media key: ${mediaItem.key}`, err);
                 return mediaItem;
@@ -233,12 +251,13 @@ export const getExplorePosts = async (req, res) => {
       })
     );
 
-    res.sendSuccess(postsWithMedia, 'Explore posts fetched');
+    res.sendSuccess(postsWithSignedMedia, 'Explore posts fetched');
   } catch (err) {
     console.error('getExplorePosts error:', err);
     res.sendError('Something went wrong fetching explore');
   }
 };
+
 
 
 export const getPostById = async (req, res) => {

@@ -2,8 +2,8 @@ import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
 
 const publicRoutes = [
-  '/api/login',
-  '/api/register',
+  '/api/auth/login',
+  '/api/auth/register',
   '/api/health',
   /^\/api\/public\/.*/, // regex for prefix-based skipping
 ];
