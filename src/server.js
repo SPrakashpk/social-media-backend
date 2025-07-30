@@ -24,7 +24,8 @@ initializeSocket(server);
 
 // Middleware
 app.use(cors({
-  origin: ['http://localhost:5173', 'http://localhost:3000'],
+
+  origin: "https://social-media-frontend-three-delta.vercel.app",//process.env.FRONTEND_URL, // or your Vercel frontend URL in production
   credentials: true,
 }));
 app.use(express.json());
