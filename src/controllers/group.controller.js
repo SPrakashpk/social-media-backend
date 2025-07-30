@@ -77,10 +77,16 @@ export const addGroupMember = async (req, res) => {
 
 export const removeGroupMember = async (req, res) => {
   try {
-    const { groupId, id } = req.params;
+    const { groupId, userId } = req.params;
+    // Remove member and their role using $pull with $elemMatch for roles
     const group = await Chat.findByIdAndUpdate(
       groupId,
-      { $pull: { members: id, roles: { user: id } } },
+      {
+        $pull: {
+          members: userId,
+          roles: { user: { $eq: userId } }
+        }
+      },
       { new: true }
     );
     res.json(group);
@@ -111,7 +117,7 @@ export const leaveGroup = async (req, res) => {
     const { userId } = req.body;
     const group = await Chat.findByIdAndUpdate(
       groupId,
-      { $pull: { members: userId, roles: { user: userId } } },
+      { $pull: { members: userId, roles: { user: { $eq: userId } } } },
       { new: true }
     );
     res.json(group);

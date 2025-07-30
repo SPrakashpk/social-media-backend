@@ -1,8 +1,26 @@
+// Get recommended users (for explore page)
+export const getRecommendedUsers = async (req, res) => {
+  try {
+    // Optionally exclude current user and users already followed
+    const currentUserId = req.user?.id || req.query.currentUserId;
+    let excludeIds = [];
+    if (currentUserId) {
+      const currentUser = await User.findById(currentUserId).select('following');
+      excludeIds = [currentUserId, ...(currentUser?.following || [])];
+    }
+    const users = await User.find(excludeIds.length ? { _id: { $nin: excludeIds } } : {})
+      .select('_id username name avatar');
+    res.sendSuccess(users, 'Recommended users fetched');
+  } catch (err) {
+    console.error('Get recommended users error:', err);
+    res.sendError('Server error', 500);
+  }
+};
 import User from "../models/User.js";
 
 import { GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import { S3Client } from '@aws-sdk/client-s3';
+import { s3Client } from '../utils/s3Client.js';
 import Post from '../models/Post.js';
 
 // User Controller
@@ -65,33 +83,41 @@ export const followUser = async (req, res) => {
 };
 
 
-export const unfollowUser = (req, res) => {
-  /*
-    req.userId: ID of current user (from auth middleware)
-    req.params.id: ID of user to unfollow
-  */
+export const unfollowUser = async (req, res) => {
   try {
-    const currentUserId = req.userId;
+    const currentUserId = req.userId || req.user?._id?.toString();
     const targetUserId = req.params.id;
+
+    if (!currentUserId) {
+      return res.sendError("Unauthorized - No user ID in request", 401);
+    }
+
     if (currentUserId === targetUserId) {
       return res.sendError("You can't unfollow yourself", 400);
     }
-    // Remove from following of current user, remove from followers of target user
-    Promise.all([
-      User.findByIdAndUpdate(currentUserId, { $pull: { following: targetUserId } }, { new: true }),
-      User.findByIdAndUpdate(targetUserId, { $pull: { followers: currentUserId } }, { new: true })
-    ]).then(([current, target]) => {
-      if (!target) return res.sendError('User not found', 404);
-      res.sendSuccess({ following: current.following, followers: target.followers }, 'Unfollowed successfully');
-    }).catch(err => {
-      console.error(err);
-      res.sendError('Server error', 500);
-    });
-  } catch (error) {
-    console.error(error);
-    res.sendError('Server error', 500);
+
+    const currentUser = await User.findById(currentUserId);
+    const targetUser = await User.findById(targetUserId);
+
+    if (!currentUser || !targetUser) {
+      return res.sendError("One or both users not found", 404);
+    }
+
+    currentUser.following.pull(targetUser._id);
+    targetUser.followers.pull(currentUser._id);
+
+    await currentUser.save();
+    await targetUser.save();
+
+    return res.sendSuccess({}, "Unfollowed successfully");
+  } catch (err) {
+    console.error("Unfollow error:", err);
+    res.sendError("Server error");
   }
 };
+
+
+
 
 export const getFollowers = (req, res) => {
   // req.params.id: user whose followers to fetch

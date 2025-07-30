@@ -6,11 +6,12 @@ const publicRoutes = [
   '/api/auth/register',
   '/api/health',
   /^\/api\/public\/.*/, // regex for prefix-based skipping
+  '/username-available', 
 ];
 
 const isPublicRoute = (url) => {
   return publicRoutes.some((route) =>
-    typeof route === 'string' ? route === url : route.test(url)
+    typeof route === 'string' ? url.includes(route) : route.test(url)
   );
 };
 
@@ -22,6 +23,8 @@ const auth = async (req, res, next) => {
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     req.user = await User.findById(decoded.id).select('-password');
+    req.userId = decoded.id;
+
     next();
   } catch (err) {
     res.sendError("Token is not valid", 401);

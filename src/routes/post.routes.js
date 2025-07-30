@@ -20,9 +20,7 @@ import { uploadPostMedia } from '../config/multer-s3.js';
 
 const router = express.Router(); 
 
-router.post('/create',(req, res,next)=>{console.log('post route reached');
-    next();
-}, uploadPostMedia, createPostWithMedia);
+router.post('/create', uploadPostMedia, createPostWithMedia);
 router.get('/', getAllPosts);
 router.get('/feed', getFeedPosts);
 router.get('/explore', getExplorePosts);

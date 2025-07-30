@@ -9,7 +9,7 @@ export const registerUser = async (req, res) => {
     try {
         const { name, email, password, username, bio = '', avatar = '' } = req.body;
 
-        const existingUser = await User.findOne({ email });
+        const existingUser = await User.findOne({ $or: [ { email }, { username } ] });
         if (existingUser) {
             return res.sendError('Email already in use', 400);
         }
@@ -59,7 +59,6 @@ export const registerUser = async (req, res) => {
     } catch (err) {
         if (newUser && newUser._id) {
             await User.findByIdAndDelete(newUser._id);
-            console.log(`Rolled back user: ${newUser._id}`);
         }
         console.error('Register error:', err); // ✅ Add this
         return res.sendError('Server error', 500, err);
@@ -69,10 +68,8 @@ export const registerUser = async (req, res) => {
 export const checkUsernameAvailability = async (req, res) => {
     try {
         const { username } = req.params;
-        //console.log('Checking username:', username);
 
-        const exists = await User.exists({ username: username.toLowerCase() });
-        //console.log('Exists:', exists);
+        const exists = await User.exists({ username: { $regex: `^${username}$`, $options: 'i' } });
 
         return res.sendSuccess({ available: !exists });
     } catch (err) {
@@ -162,7 +159,7 @@ export const loginUser = async (req, res) => {
         const { email, password, } = req.body;
 
         // Check if user already exists
-        const existingUser = await User.findOne({ email });
+        const existingUser = await User.findOne({ $or: [ { email }, { username: email } ] });
         if (!existingUser) {
             return res.sendError('Invalid Username or Password', 400);
         }
