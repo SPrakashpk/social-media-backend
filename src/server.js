@@ -24,7 +24,7 @@ initializeSocket(server);
 
 // Middleware
 app.use(cors({
-  origin: process.env.FRONTEND_URL, // or your Vercel frontend URL in production
+  origin: ['http://localhost:5173', 'http://localhost:3000'],
   credentials: true,
 }));
 app.use(express.json());

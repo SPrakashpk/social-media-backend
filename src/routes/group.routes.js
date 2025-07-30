@@ -18,7 +18,7 @@ router.get('/', listGroups);
 router.get('/:groupId', getGroupMessages);
 router.post('/:groupId/message', sendGroupMessage);
 router.post('/:groupId/members', addGroupMember);
-router.delete('/:groupId/members/:id', removeGroupMember);
+router.delete('/:groupId/members/:userId', removeGroupMember);
 router.post('/:groupId/role', updateMemberRole);
 router.post('/:groupId/leave', leaveGroup);
 

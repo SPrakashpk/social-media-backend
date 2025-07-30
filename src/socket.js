@@ -11,8 +11,10 @@ const onlineUsers = new Map()
 export const initializeSocket = (server) => {
   const io = new Server(server, {
     cors: {
-      origin: '*', // or specific origin
-      //   methods: ['GET', 'POST'],
+      origin: '*',
+      // origin: ['http://localhost:5173', 'http://localhost:3000'],
+      // methods: ['GET', 'POST'],
+      // credentials: true,
     },
   });
 
